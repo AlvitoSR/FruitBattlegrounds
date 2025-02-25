@@ -1,0 +1,111 @@
+if _G.ScriptRunning then return end -- Evita múltiplas execuções
+_G.ScriptRunning = true
+
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Coordenadas do boss
+local bossPosition = Vector3.new(-996.23, 937.93, 750.61)
+local safePosition = bossPosition + Vector3.new(5, 0, 5)
+
+-- Função para teleportar para o boss
+local function teleportToBoss()
+    local player = Players.LocalPlayer
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChild("Humanoid")
+
+    if hrp and humanoid then
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, false) -- Desativa física
+        hrp.Velocity = Vector3.new(0, 0, 0) -- Para o movimento
+        hrp.CFrame = CFrame.new(safePosition) -- Teleporta
+        task.wait(0.2) -- Pequeno delay para estabilizar
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true) -- Reativa física
+    end
+end
+
+-- Função para trocar de servidor
+local function serverHop()
+    local gameId = game.PlaceId
+    local url = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Desc&limit=100"
+
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(game:HttpGet(url))
+    end)
+
+    if success and result and result.data then
+        for _, server in ipairs(result.data) do
+            if server.playing >= 15 and server.playing < server.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(gameId, server.id, Players.LocalPlayer)
+                return
+            end
+        end
+    end
+end
+
+-- Variável para o hub
+local ScreenGui
+
+-- Criar UI para Deeplink
+local function toggleDeeplinkHub()
+    if ScreenGui then
+        ScreenGui.Enabled = not ScreenGui.Enabled -- Alterna visibilidade
+        return
+    end
+
+    ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Parent = game.CoreGui
+
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0, 300, 0, 100)
+    Frame.Position = UDim2.new(0.5, -150, 0.2, 0)
+    Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Frame.Parent = ScreenGui
+
+    local TextBox = Instance.new("TextBox")
+    TextBox.Size = UDim2.new(0.9, 0, 0.4, 0)
+    TextBox.Position = UDim2.new(0.05, 0, 0.1, 0)
+    TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.Text = "Insira o Deeplink aqui..."
+    TextBox.Parent = Frame
+
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0.9, 0, 0.3, 0)
+    Button.Position = UDim2.new(0.05, 0, 0.55, 0)
+    Button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.Text = "Entrar no Servidor"
+    Button.Parent = Frame
+
+    -- Função para conectar ao servidor via deeplink
+    local function joinServer()
+        local link = TextBox.Text
+        local placeId, jobId = link:match("placeId=(%d+)&gameInstanceId=([%w%-]+)")
+
+        if placeId and jobId then
+            TeleportService:TeleportToPlaceInstance(tonumber(placeId), jobId, Players.LocalPlayer)
+        else
+            Button.Text = "Deeplink inválido!"
+            task.wait(1.5)
+            Button.Text = "Entrar no Servidor"
+        end
+    end
+
+    Button.MouseButton1Click:Connect(joinServer)
+end
+
+-- Detecta teclas pressionadas
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed then
+        if input.KeyCode == Enum.KeyCode.E then
+            teleportToBoss()
+        elseif input.KeyCode == Enum.KeyCode.H then
+            serverHop()
+        elseif input.KeyCode == Enum.KeyCode.L then
+            toggleDeeplinkHub()
+        end
+    end
+end)
